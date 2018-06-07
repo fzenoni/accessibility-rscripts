@@ -4,9 +4,10 @@ library(sf)
 library(ggplot2)
 library(dplyr)
 library(data.table)
-library(tmap)
+# library(tmap)
 library(viridis)
-library(tmaptools)
+# library(tmaptools)
+library(ggmap)
 
 # Set custom overpass URL
 osmdata::set_overpass_url("http://40.68.166.16/api/interpreter")
@@ -85,11 +86,19 @@ src <- output[type == 'S']
 
 ua_city <- ua_city %>% mutate(id := seq.int(nrow(ua_city)))
 src <- merge(ua_city, avg, by = 'id')
+src <- src %>% st_transform(crs = 4326)
 
-# Plot
-tmap_mode('plot')
+xmin <- 9.1462
+ymin <- 45.4386
+xmax <- 9.2047
+ymax <- 45.4911
 
-pal <- plasma(n = 100, direction=-1)
+milan_pol = st_sf(st_sfc(st_polygon(list(cbind(c(xmin, xmax, xmax, xmin, xmin),
+                                   c(ymin, ymin, ymax, ymax, ymin))))), crs = 4326)
+src_subset <- st_intersection(src, milan_pol)
+plot(src_subset['avg'])
+
+# pal <- plasma(n = 100, direction=-1)
 
 # tiles <- read_osm(bbox_milan, zoom = 15, type = 'osm-public-transport')
 
@@ -124,9 +133,11 @@ theme_map <- function(...) {
 }
 
 
+
+
 # Quantiles
 no_classes <- 6
-quantiles <- quantile(src$avg, 
+quantiles <- quantile(src_subset$avg, 
                       probs = seq(0, 1, length.out = no_classes + 1))
 labels <- c()
 for(idx in 1:length(quantiles)){
@@ -136,23 +147,32 @@ for(idx in 1:length(quantiles)){
 }
 labels <- labels[1:length(labels)-1]
 
-src$avg_quantiles <- cut(src$avg, 
+src_subset$avg_quantiles <- cut(src_subset$avg, 
                          breaks = quantiles, 
                          labels = labels, 
                          include.lowest = T)
 
 
-p <- ggplot() +
-  geom_sf(data = st_sf(st_cast(st_union(city), "POLYGON")), colour = 'black') +
-  geom_sf(data = src, aes(fill = avg_quantiles),
-          col = 'white', lwd = 0.1
-  ) +
+milan_small <- c(xmin, ymin, xmax, ymax)
+bbox_milan_small <- matrix(milan_small, ncol = 2)
+milan_map <- ggmap::get_map(location = bbox_milan_small, source = 'stamen', maptype = 'toner-hybrid', zoom = 15)
+# milan_map <- ggmap::get_map(location = milan_small, source = 'osm', zoom = 12)
+# milan_map <- read_osm(bbox_milan_small, zoom = 16, type = 'osm')
+
+p <- ggmap::ggmap(milan_map) +
+  # geom_sf(data = st_sf(st_cast(st_union(city), "POLYGON")), colour = 'black', inherit.aes = FALSE) +
+  geom_sf(data = st_transform(src_subset, crs = 4326), aes(fill = avg_quantiles),
+          alpha = 0.7, col = 'white', lwd = 0.1, inherit.aes = FALSE) +
+  coord_sf(xlim = c(bbox_milan_small[1,1], bbox_milan_small[1,2]),
+           ylim = c(bbox_milan_small[2,1], bbox_milan_small[2,2]), default = TRUE) +
+  # geom_sf(data = poi, inherit.aes = FALSE) +
   theme_map() +
   labs(x = NULL,
        y = NULL,
        title = "Accessibility to restaurants in Milan",
        subtitle = "Average time to go by foot to the 5 closest restaurants, 2018",
        caption = "Geometries: Copernicus Land Monitoring Service - Urban Atlas\nData: OpenStreetMap, OSRM") +
+  # scale_alpha_continuous(guide='none') +
   scale_fill_viridis(
     option = "plasma",
     name = "Average time (min)",
