@@ -6,7 +6,7 @@ library(dplyr)
 library(data.table)
 # library(tmap)
 library(viridis)
-# library(tmaptools)
+library(tmaptools)
 library(ggmap)
 
 # Set custom overpass URL
@@ -84,7 +84,7 @@ write.table(output, 'input.txt', sep = ' ', row.names = FALSE,
 
 src <- output[type == 'S']
 
-ua_city <- ua_city %>% mutate(id := seq.int(nrow(ua_city)))
+ua_city <- ua_city %>% mutate(id := seq.int(nrow(ua_city)) - 1)
 src <- merge(ua_city, avg, by = 'id')
 src <- src %>% st_transform(crs = 4326)
 
@@ -133,24 +133,45 @@ theme_map <- function(...) {
 }
 
 
-
-
-# Quantiles
-no_classes <- 6
-quantiles <- quantile(src_subset$avg, 
-                      probs = seq(0, 1, length.out = no_classes + 1))
+# Pretty breaks
+pretty_breaks <- c(0.3, 2, 3, 5, 10)
+# find the extremes
+minVal <- min(src_subset$avg, na.rm = T)
+maxVal <- max(src_subset$avg, na.rm = T)
+# compute labels
 labels <- c()
-for(idx in 1:length(quantiles)){
-  labels <- c(labels, paste0(round(quantiles[idx], 2), 
-                             " – ", 
-                             round(quantiles[idx + 1], 2)))
+brks <- c(minVal, pretty_breaks, maxVal)
+# round the labels (actually, only the extremes)
+for(idx in 1:length(brks)){
+  labels <- c(labels, round(brks[idx+1], 2))
 }
 labels <- labels[1:length(labels)-1]
 
-src_subset$avg_quantiles <- cut(src_subset$avg, 
-                         breaks = quantiles, 
-                         labels = labels, 
-                         include.lowest = T)
+# Breaks
+src_subset$brks <- cut(src_subset$avg, 
+                     breaks = brks, 
+                     include.lowest = TRUE, 
+                     labels = labels)
+
+brks_scale <- levels(src_subset$brks)
+labels_scale <- rev(brks_scale)
+
+# Quantiles
+# no_classes <- 6
+# quantiles <- quantile(src_subset$avg, 
+#                       probs = seq(0, 1, length.out = no_classes + 1))
+# labels <- c()
+# for(idx in 1:length(quantiles)){
+#   labels <- c(labels, paste0(round(quantiles[idx], 2), 
+#                              " – ", 
+#                              round(quantiles[idx + 1], 2)))
+# }
+# labels <- labels[1:length(labels)-1]
+# 
+# src_subset$avg_quantiles <- cut(src_subset$avg, 
+#                          breaks = quantiles, 
+#                          labels = labels, 
+#                          include.lowest = T)
 
 
 milan_small <- c(xmin, ymin, xmax, ymax)
@@ -159,31 +180,61 @@ milan_map <- ggmap::get_map(location = bbox_milan_small, source = 'stamen', mapt
 # milan_map <- ggmap::get_map(location = milan_small, source = 'osm', zoom = 12)
 # milan_map <- read_osm(bbox_milan_small, zoom = 16, type = 'osm')
 
+
+
+# Draw
 p <- ggmap::ggmap(milan_map) +
   # geom_sf(data = st_sf(st_cast(st_union(city), "POLYGON")), colour = 'black', inherit.aes = FALSE) +
-  geom_sf(data = st_transform(src_subset, crs = 4326), aes(fill = avg_quantiles),
+  geom_sf(data = st_transform(src_subset, crs = 4326), aes(fill = brks),
           alpha = 0.7, col = 'white', lwd = 0.1, inherit.aes = FALSE) +
   coord_sf(xlim = c(bbox_milan_small[1,1], bbox_milan_small[1,2]),
            ylim = c(bbox_milan_small[2,1], bbox_milan_small[2,2]), default = TRUE) +
-  # geom_sf(data = poi, inherit.aes = FALSE) +
+  geom_sf(data = poi, inherit.aes = FALSE, col = 'green', size = 1) +
   theme_map() +
+  theme(legend.position = 'bottom') +
   labs(x = NULL,
        y = NULL,
        title = "Accessibility to restaurants in Milan",
        subtitle = "Average time to go by foot to the 5 closest restaurants, 2018",
-       caption = "Geometries: Copernicus Land Monitoring Service - Urban Atlas\nData: OpenStreetMap, OSRM") +
+       caption = "Geometries: Copernicus Land Monitoring Service - Urban Atlas\nData: OpenStreetMap, OSRM")
   # scale_alpha_continuous(guide='none') +
-  scale_fill_viridis(
-    option = "plasma",
-    name = "Average time (min)",
-    discrete = T,
-    direction = -1,
-    guide = guide_legend(
-      keyheight = unit(5, units = "mm"),
-      title.position = 'top',
-      reverse = F
-    ))
+  # scale_fill_viridis(
+  #   option = "plasma",
+  #   name = "Average time (min)",
+  #   discrete = T,
+  #   direction = -1,
+  #   guide = guide_legend(
+  #     keyheight = unit(5, units = "mm"),
+  #     title.position = 'top',
+  #     reverse = F
+  #   ))
 
-p
+q <- p +
+  scale_fill_manual(
+    # in manual scales, one has to define colors, well, manually
+    # I can directly access them using viridis' magma-function
+    values = rev(plasma(6)),
+    breaks = rev(brks_scale),
+    name = "Average time (min)",
+    drop = FALSE,
+    labels = labels_scale,
+    guide = guide_legend(
+      direction = "horizontal",
+      keyheight = unit(2, units = "mm"),
+      keywidth = unit(70 / length(labels), units = "mm"),
+      title.position = 'top',
+      # I shift the labels around, the should be placed 
+      # exactly at the right end of each legend key
+      title.hjust = 0.5,
+      label.hjust = 1,
+      nrow = 1,
+      byrow = T,
+      # also the guide needs to be reversed
+      reverse = T,
+      label.position = "bottom"
+    )
+  )
+
+q
 
 
