@@ -82,7 +82,7 @@ write.table(output, 'input.txt', sep = ' ', row.names = FALSE,
 # Run analysis.R
 ###
 
-src <- output[type == 'S']
+# src <- output[type == 'S']
 
 ua_city <- ua_city %>% mutate(id := seq.int(nrow(ua_city)) - 1)
 src <- merge(ua_city, avg, by = 'id')
@@ -94,7 +94,7 @@ xmax <- 9.2047
 ymax <- 45.4911
 
 milan_pol = st_sf(st_sfc(st_polygon(list(cbind(c(xmin, xmax, xmax, xmin, xmin),
-                                   c(ymin, ymin, ymax, ymax, ymin))))), crs = 4326)
+                                               c(ymin, ymin, ymax, ymax, ymin))))), crs = 4326)
 src_subset <- st_intersection(src, milan_pol)
 plot(src_subset['avg'])
 
@@ -127,7 +127,7 @@ theme_map <- function(...) {
       plot.background = element_rect(fill = "#f5f5f2", color = NA), 
       panel.background = element_rect(fill = "#f5f5f2", color = NA), 
       legend.background = element_rect(fill = "#f5f5f2", color = NA),
-      panel.border = element_blank(),
+      panel.border = element_rect(colour = 'black', fill = NA, size = 1),
       ...
     )
 }
@@ -149,9 +149,9 @@ labels <- labels[1:length(labels)-1]
 
 # Breaks
 src_subset$brks <- cut(src_subset$avg, 
-                     breaks = brks, 
-                     include.lowest = TRUE, 
-                     labels = labels)
+                       breaks = brks, 
+                       include.lowest = TRUE, 
+                       labels = labels)
 
 brks_scale <- levels(src_subset$brks)
 labels_scale <- rev(brks_scale)
@@ -176,40 +176,39 @@ labels_scale <- rev(brks_scale)
 
 milan_small <- c(xmin, ymin, xmax, ymax)
 bbox_milan_small <- matrix(milan_small, ncol = 2)
-milan_map <- ggmap::get_map(location = bbox_milan_small, source = 'stamen', maptype = 'toner-hybrid', zoom = 15)
+milan_map <- ggmap::get_map(location = bbox_milan_small, source = 'stamen', maptype = 'toner-hybrid', zoom = 16)
 # milan_map <- ggmap::get_map(location = milan_small, source = 'osm', zoom = 12)
 # milan_map <- read_osm(bbox_milan_small, zoom = 16, type = 'osm')
 
-
+poi_df <- data.frame(st_coordinates(poi))
 
 # Draw
 p <- ggmap::ggmap(milan_map) +
-  # geom_sf(data = st_sf(st_cast(st_union(city), "POLYGON")), colour = 'black', inherit.aes = FALSE) +
   geom_sf(data = st_transform(src_subset, crs = 4326), aes(fill = brks),
           alpha = 0.7, col = 'white', lwd = 0.1, inherit.aes = FALSE) +
   coord_sf(xlim = c(bbox_milan_small[1,1], bbox_milan_small[1,2]),
            ylim = c(bbox_milan_small[2,1], bbox_milan_small[2,2]), default = TRUE) +
-  geom_sf(data = poi, inherit.aes = FALSE, col = 'green', size = 1) +
+  geom_point(data = poi_df, aes(X,Y), inherit.aes = FALSE, size = 0.5, shape = 15, colour = 'darkgreen') +
+  scalebar(src_subset, dist = 0.5, dist_unit = 'km',
+           dd2km = TRUE, model = 'WGS84', location = 'bottomright',
+           st.size = 4, height = 0.01, st.dist = 0.01,
+           st.bottom = FALSE, anchor =
+             c(x = xmax - 0.001, y = ymin + 0.001)) +
+  north(src_subset, symbol = 12) +
   theme_map() +
-  theme(legend.position = 'bottom') +
+  theme(legend.position = 'bottom', legend.box = 'vertical') +
   labs(x = NULL,
        y = NULL,
        title = "Accessibility to restaurants in Milan",
-       subtitle = "Average time to go by foot to the 5 closest restaurants, 2018",
+       subtitle = "Average time to go by foot to the 5 closest restaurants",
        caption = "Geometries: Copernicus Land Monitoring Service - Urban Atlas\nData: OpenStreetMap, OSRM")
-  # scale_alpha_continuous(guide='none') +
-  # scale_fill_viridis(
-  #   option = "plasma",
-  #   name = "Average time (min)",
-  #   discrete = T,
-  #   direction = -1,
-  #   guide = guide_legend(
-  #     keyheight = unit(5, units = "mm"),
-  #     title.position = 'top',
-  #     reverse = F
-  #   ))
 
 q <- p +
+  # scale_color_manual(
+  #   name = element_blank(),
+  #   na.translate = FALSE,
+  #   labels = 'Restaurant',
+  #   values = 'darkgreen') +
   scale_fill_manual(
     # in manual scales, one has to define colors, well, manually
     # I can directly access them using viridis' magma-function
@@ -234,7 +233,6 @@ q <- p +
       label.position = "bottom"
     )
   )
-
 q
 
 
