@@ -205,19 +205,20 @@ p <- ggmap::ggmap(milan_map) +
   # coord_sf(xlim = c(bbox_milan_small[1,1], bbox_milan_small[1,2]),
   #          ylim = c(bbox_milan_small[2,1], bbox_milan_small[2,2]), default = TRUE) +
   geom_point(data = poi_df, aes(X,Y), inherit.aes = FALSE, size = 0.5, shape = 15, colour = 'red4') +
+  geom_sf(data=st_boundary(milan_detail_pol), inherit.aes = FALSE, colour = 'red', size = 1, linetype = 1) +
   scalebar(src_subset, dist = 0.5, dist_unit = 'km',
            dd2km = TRUE, model = 'WGS84', location = 'bottomright',
-           st.size = 4, height = 0.01, st.dist = 0.01,
+           st.size = 4, height = 0.01, st.dist = 0.02,
            st.bottom = FALSE, anchor =
-             c(x = xmax - 0.0015, y = ymin + 0.001)) +
+             c(x = xmax - 0.0032, y = ymin + 0.002)) +
   north(src_subset, symbol = 12) +
   theme_map() +
-  theme(legend.position = 'bottom', legend.box = 'vertical') +
-  labs(x = NULL,
-       y = NULL,
-       title = "Accessibility to restaurants in Milan",
-       subtitle = "Average time to go by foot to the 5 closest restaurants",
-       caption = "Geometries: Copernicus Land Monitoring Service - Urban Atlas\nData: OpenStreetMap, OSRM")
+  theme(legend.position = 'bottom', legend.box = 'vertical')
+  # labs(x = NULL,
+  #      y = NULL,
+  #      title = "Accessibility to restaurants in Milan",
+  #      subtitle = "Average time to go by foot to the 5 closest restaurants",
+  #      caption = "Geometries: Copernicus Land Monitoring Service - Urban Atlas\nData: OpenStreetMap, OSRM")
 
 q <- p +
   # scale_color_manual(
@@ -228,7 +229,7 @@ q <- p +
   scale_fill_manual(
     # in manual scales, one has to define colors, well, manually
     # I can directly access them using viridis' magma-function
-    values = rev(viridis(6)),
+    values = rev(viridis(8)[2:7]),
     breaks = rev(brks_scale),
     name = "Average time (min)",
     drop = FALSE,
