@@ -8,16 +8,17 @@ library(data.table)
 library(viridis)
 library(tmaptools)
 library(ggmap)
+library(ggsn)
 
 # Set custom overpass URL
 osmdata::set_overpass_url("http://40.68.166.16/api/interpreter")
 
 # Load/Extract Milan boundaries
-poly_name <- 'Milan10_poly.rds'
+poly_name <- 'Milan8_poly.rds'
 if(!file.exists(file.path('data', poly_name))) {
   poly_path <- file.path('data', poly_name)
   city <- get_city_boundary(name = 'Milan',
-                            adm_level = '10')
+                            adm_level = '8')
   saveRDS(city, poly_path)
 } else {
   city <- readRDS(file.path('data', poly_name))
@@ -27,7 +28,7 @@ if(!file.exists(file.path('data', poly_name))) {
 # bound <- read_sf('data/Milan_Urban_Atlas/Shapefiles/Boundary2012_IT002L2_MILANO.shp')
 # st_crs(bound) <- 3035
 
-milan <- city %>% filter(name == 'Milano')
+# milan <- city %>% filter(name == 'Milano')
 
 bbox <- st_bbox(city)
 # create some kind of buffer to mitigate border effects
@@ -54,7 +55,8 @@ st_crs(ua) <- 3035
 city <- st_transform(city, crs = 3035)
 ua_city_all <- ua[city,]
 
-urban_fabric <- unique(ua_city_all$ITEM2012)[1:5]
+urban_indexes <- grep('urban fabric', unique(ua_city_all$ITEM2012))
+urban_fabric <- unique(ua_city_all$ITEM2012)[urban_indexes]
 ua_city <- ua_city_all %>% filter(ITEM2012 %in% urban_fabric)
 
 # Building the output
@@ -80,7 +82,16 @@ write.table(output, 'input.txt', sep = ' ', row.names = FALSE,
 
 ###
 # Run analysis.R
+data <- fread('../osrm-application/output.csv')
+
+# Compute average duration for 5 closer destinations
+avg <- data[, .(avg = mean(head(sort(V2), 5))), by = V1]
+# avg <- avg5[, .(avg = mean(closer5)), by = V1]
+setnames(avg, 'V1', 'id')
+avg[, avg := avg/60]
 ###
+
+
 
 # src <- output[type == 'S']
 
@@ -88,10 +99,10 @@ ua_city <- ua_city %>% mutate(id := seq.int(nrow(ua_city)) - 1)
 src <- merge(ua_city, avg, by = 'id')
 src <- src %>% st_transform(crs = 4326)
 
-xmin <- 9.1462
-ymin <- 45.4386
-xmax <- 9.2047
-ymax <- 45.4911
+xmin <- 9.1792
+ymin <- 45.4511
+xmax <- 9.2377
+ymax <- 45.5030
 
 milan_pol = st_sf(st_sfc(st_polygon(list(cbind(c(xmin, xmax, xmax, xmin, xmin),
                                                c(ymin, ymin, ymax, ymax, ymin))))), crs = 4326)
@@ -173,27 +184,32 @@ labels_scale <- rev(brks_scale)
 #                          labels = labels, 
 #                          include.lowest = T)
 
+# From now on: mind that maps must be projected in 3857,
+# NOT kept in lat-lon 4326!!!!!
 
 milan_small <- c(xmin, ymin, xmax, ymax)
 bbox_milan_small <- matrix(milan_small, ncol = 2)
-milan_map <- ggmap::get_map(location = bbox_milan_small, source = 'stamen', maptype = 'toner-hybrid', zoom = 16)
-# milan_map <- ggmap::get_map(location = milan_small, source = 'osm', zoom = 12)
-# milan_map <- read_osm(bbox_milan_small, zoom = 16, type = 'osm')
+if(!file.exists('data/milan_map.Rds')) {
+  milan_map <- ggmap::get_map(location = bbox_milan_small, source = 'stamen', maptype = 'toner-hybrid', zoom = 16)
+  saveRDS(milan_map, 'data/milan_map.Rds')
+} else {
+  milan_map <- readRDS('data/milan_map.Rds')
+}
 
 poi_df <- data.frame(st_coordinates(poi))
 
 # Draw
 p <- ggmap::ggmap(milan_map) +
-  geom_sf(data = st_transform(src_subset, crs = 4326), aes(fill = brks),
+  geom_sf(data = src_subset, aes(fill = brks),
           alpha = 0.7, col = 'white', lwd = 0.1, inherit.aes = FALSE) +
-  coord_sf(xlim = c(bbox_milan_small[1,1], bbox_milan_small[1,2]),
-           ylim = c(bbox_milan_small[2,1], bbox_milan_small[2,2]), default = TRUE) +
-  geom_point(data = poi_df, aes(X,Y), inherit.aes = FALSE, size = 0.5, shape = 15, colour = 'darkgreen') +
+  # coord_sf(xlim = c(bbox_milan_small[1,1], bbox_milan_small[1,2]),
+  #          ylim = c(bbox_milan_small[2,1], bbox_milan_small[2,2]), default = TRUE) +
+  geom_point(data = poi_df, aes(X,Y), inherit.aes = FALSE, size = 0.5, shape = 15, colour = 'red4') +
   scalebar(src_subset, dist = 0.5, dist_unit = 'km',
            dd2km = TRUE, model = 'WGS84', location = 'bottomright',
            st.size = 4, height = 0.01, st.dist = 0.01,
            st.bottom = FALSE, anchor =
-             c(x = xmax - 0.001, y = ymin + 0.001)) +
+             c(x = xmax - 0.0015, y = ymin + 0.001)) +
   north(src_subset, symbol = 12) +
   theme_map() +
   theme(legend.position = 'bottom', legend.box = 'vertical') +
@@ -212,7 +228,7 @@ q <- p +
   scale_fill_manual(
     # in manual scales, one has to define colors, well, manually
     # I can directly access them using viridis' magma-function
-    values = rev(plasma(6)),
+    values = rev(viridis(6)),
     breaks = rev(brks_scale),
     name = "Average time (min)",
     drop = FALSE,
