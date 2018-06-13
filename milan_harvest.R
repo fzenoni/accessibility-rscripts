@@ -77,7 +77,7 @@ write.table(output, 'input.txt', sep = ' ', row.names = FALSE,
             col.names = FALSE, quote = FALSE)
 
 ####
-# Run OSRM and get output
+# Run OSRM C++ script and get output
 ####
 
 ###
@@ -199,6 +199,9 @@ if(!file.exists('data/milan_map.Rds')) {
 poi_df <- data.frame(st_coordinates(poi))
 
 # Draw
+# SPECIAL INSTRUCTIONS:
+# The row that includes milan_detail_pol boundary will not be available unless
+# the routing.R script is executed
 p <- ggmap::ggmap(milan_map) +
   geom_sf(data = src_subset, aes(fill = brks),
           alpha = 0.7, col = 'white', lwd = 0.1, inherit.aes = FALSE) +

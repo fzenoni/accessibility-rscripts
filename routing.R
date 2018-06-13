@@ -1,3 +1,7 @@
+# BEFORE EXECUTING THIS SCRIPT 
+# YOU HAVE TO TURN ON THE HTTP API
+# osrm-routed map.osrm
+
 library(curl)
 library(jsonlite)
 library(googlePolylines)
