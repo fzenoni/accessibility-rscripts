@@ -4,7 +4,6 @@ library(sf)
 library(ggplot2)
 library(dplyr)
 library(data.table)
-# library(tmap)
 library(viridis)
 library(tmaptools)
 library(ggmap)
@@ -38,10 +37,13 @@ bbox['xmax'] <- bbox['xmax'] + 0.1
 bbox['ymax'] <- bbox['ymax'] + 0.1
 bbox <- matrix(bbox, nrow=2) 
 
-query <- bbox %>% opq() %>% add_osm_feature("amenity", "restaurant") %>% 
+# Uncomment if you want restaurants 
+query <- bbox %>% opq() %>% add_osm_feature("amenity", "restaurant") %>%
   osmdata_sf() %>% unique_osmdata()
 
 poi <- cityr::aggregate_points(query)
+
+# poi <- data_sf # CAMPANILI!!!!
 
 plot(st_as_sfc(st_bbox(city)))
 plot(st_union(city), add = T)
@@ -81,7 +83,6 @@ write.table(output, 'input.txt', sep = ' ', row.names = FALSE,
 ####
 
 ###
-# Run analysis.R
 data <- fread('../osrm-application/output.csv')
 
 # Compute average duration for 5 closer destinations
@@ -95,41 +96,31 @@ avg[, avg := avg/60]
 
 # src <- output[type == 'S']
 
-ua_city <- ua_city %>% mutate(id := seq.int(nrow(ua_city)) - 1)
+ua_city <- ua_city %>% mutate(id = seq.int(nrow(ua_city)) - 1)
 src <- merge(ua_city, avg, by = 'id')
 src <- src %>% st_transform(crs = 4326)
 
-xmin <- 9.1792
+xmin <- 9.1742
 ymin <- 45.4511
-xmax <- 9.2377
-ymax <- 45.5030
+xmax <- 9.2427
+ymax <- 45.492
 
 milan_pol = st_sf(st_sfc(st_polygon(list(cbind(c(xmin, xmax, xmax, xmin, xmin),
                                                c(ymin, ymin, ymax, ymax, ymin))))), crs = 4326)
 src_subset <- st_intersection(src, milan_pol)
 plot(src_subset['avg'])
 
-# pal <- plasma(n = 100, direction=-1)
-
-# tiles <- read_osm(bbox_milan, zoom = 15, type = 'osm-public-transport')
-
-# tm_shape(tiles) + tm_raster() +
-# tm_shape(ua_city_all) + tm_fill() +
-# tm_shape(src) + tm_fill(col = 'avg', palette = pal, style = 'quantile') +
-# tm_shape(poi) + tm_dots() +
-# # tm_grid(n.x = 5, n.y = 5, projection = 'longlat') +
-# tm_scale_bar(position = c("right", "bottom"))
 
 # Try with ggplot2
 # https://timogrossenbacher.ch/2016/12/beautiful-thematic-maps-with-ggplot2-only
 theme_map <- function(...) {
   theme_minimal() +
     theme(
-      text = element_text(family = "Ubuntu Regular", color = "#22211d"),
-      axis.line = element_blank(),
-      axis.text.x = element_blank(),
-      axis.text.y = element_blank(),
-      axis.ticks = element_blank(),
+      text = element_text(family = "Liberation Sans", color = "#22211d"),
+      # axis.line = element_blank(),
+      # axis.text.x = element_blank(),
+      # axis.text.y = element_blank(),
+      # axis.ticks = element_blank(),
       axis.title.x = element_blank(),
       axis.title.y = element_blank(),
       # panel.grid.minor = element_line(color = "#ebebe5", size = 0.2),
@@ -145,7 +136,8 @@ theme_map <- function(...) {
 
 
 # Pretty breaks
-pretty_breaks <- c(0.3, 2, 3, 5, 10)
+# pretty_breaks <- c(0.3, 2, 3, 5, 10)
+pretty_breaks <- c(1, 2, 5, 10, 15)
 # find the extremes
 minVal <- min(src_subset$avg, na.rm = T)
 maxVal <- max(src_subset$avg, na.rm = T)
@@ -154,7 +146,7 @@ labels <- c()
 brks <- c(minVal, pretty_breaks, maxVal)
 # round the labels (actually, only the extremes)
 for(idx in 1:length(brks)){
-  labels <- c(labels, round(brks[idx+1], 2))
+  labels <- c(labels, round(brks[idx+1], 1))
 }
 labels <- labels[1:length(labels)-1]
 
@@ -197,6 +189,13 @@ if(!file.exists('data/milan_map.Rds')) {
 }
 
 poi_df <- data.frame(st_coordinates(poi))
+poi_df <- poi_df %>% mutate(destination = 'restaurant')
+# poi_df <- poi_df %>% mutate(campanili = as.factor(poi$n..campanili))
+# poi_sf <- st_as_sf(poi_df, coords = c('X','Y'), crs = 4326)
+# poi_sf_map <- st_intersection(poi_sf, milan_pol)
+# poi_sf_map$campanili <- as.factor(poi_sf_map$campanili)
+# poi_sf_map <- st_coordinates(poi_sf_map) %>% data.frame %>% mutate(campanili = poi_sf_map$campanili)
+
 
 # Draw
 # SPECIAL INSTRUCTIONS:
@@ -204,26 +203,32 @@ poi_df <- data.frame(st_coordinates(poi))
 # the routing.R script is executed
 p <- ggmap::ggmap(milan_map) +
   geom_sf(data = src_subset, aes(fill = brks),
-          alpha = 0.7, col = 'white', lwd = 0.1, inherit.aes = FALSE) +
+          alpha = 0.7,
+          col = NA,
+          # lwd = 0.1,
+          inherit.aes = FALSE) +
+  # scale_y_continuous(breaks = seq(45.46, 45.49, 0.01)) +
   # coord_sf(xlim = c(bbox_milan_small[1,1], bbox_milan_small[1,2]),
   #          ylim = c(bbox_milan_small[2,1], bbox_milan_small[2,2]), default = TRUE) +
-  geom_point(data = poi_df, aes(X,Y), inherit.aes = FALSE, size = 0.5, shape = 15, colour = 'red4') +
-  geom_sf(data=st_boundary(milan_detail_pol), inherit.aes = FALSE, colour = 'red', size = 1, linetype = 1) +
+  geom_sf(data=st_boundary(milan_detail_pol), inherit.aes = FALSE, colour = 'grey25', size = 1.5, linetype = 'solid') +
+  geom_point(data = poi_df, aes(x = X, y = Y, colour = destination), size = 1, inherit.aes = FALSE) +
   scalebar(src_subset, dist = 0.5, dist_unit = 'km',
            dd2km = TRUE, model = 'WGS84', location = 'bottomright',
-           st.size = 4, height = 0.01, st.dist = 0.02,
+           st.size = 4, height = 0.01, st.dist = 0.014,
            st.bottom = FALSE, anchor =
-             c(x = xmax - 0.0032, y = ymin + 0.002)) +
-  north(src_subset, symbol = 12) +
+             c(x = xmax - 0.0032, y = ymin + 0.0018),
+           st.color = 'black', box.fill = c('grey25', 'white'),
+           border.size = 0.5) +
+  # north(src_subset, symbol = 12) +
   theme_map() +
   theme(legend.position = 'bottom', legend.box = 'vertical')
-  # labs(x = NULL,
-  #      y = NULL,
-  #      title = "Accessibility to restaurants in Milan",
-  #      subtitle = "Average time to go by foot to the 5 closest restaurants",
-  #      caption = "Geometries: Copernicus Land Monitoring Service - Urban Atlas\nData: OpenStreetMap, OSRM")
 
 q <- p +
+  scale_color_manual(
+    values = 'red3', name = 'Restaurant', label = '',
+    guide = guide_legend(direction = 'horizontal',
+                         title.position = 'right',
+                         override.aes = list(size = 4))) +
   # scale_color_manual(
   #   name = element_blank(),
   #   na.translate = FALSE,
@@ -232,7 +237,8 @@ q <- p +
   scale_fill_manual(
     # in manual scales, one has to define colors, well, manually
     # I can directly access them using viridis' magma-function
-    values = rev(viridis(8)[2:7]),
+    # values = rev(viridis(8)[2:7]),
+    values = rev(viridis(6)),
     breaks = rev(brks_scale),
     name = "Average time (min)",
     drop = FALSE,
@@ -252,7 +258,6 @@ q <- p +
       reverse = T,
       label.position = "bottom"
     )
-  )
+  ) +
+  theme(legend.box = 'horizontal')
 q
-
-
